@@ -1,277 +1,212 @@
 """
-5G 信号可视化看板 - 单元测试
+5G 信号可视化看板 - 单元测试模块
+====================================
+对 app.py 中的核心函数进行单元测试，确保数据加载、信号分类和颜色映射逻辑正确。
 
-测试覆盖:
-  1. 数据加载功能
-  2. RSRP 颜色映射函数
-  3. RSRP 信号等级判定函数
-  4. 数据筛选逻辑
-  5. 数据完整性校验
-
-运行方式: pytest test_app.py -v
+运行方式：
+    pytest test_app.py -v
 """
 
 import pytest
 import pandas as pd
 import numpy as np
-import sys
 from pathlib import Path
+import sys
 
 # 将项目根目录添加到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app import load_data, rsrp_to_color, rsrp_to_color_hex, get_rsrp_level
+from app import classify_signal_strength, get_signal_color
 
 
 # ============================================================
-# 测试数据准备
+# classify_signal_strength 函数测试
 # ============================================================
 
-@pytest.fixture
-def sample_csv(tmp_path):
-    """创建临时测试 CSV 文件。"""
-    csv_file = tmp_path / "test_signal.csv"
-    data = {
-        "Latitude": [31.21, 31.22, 31.23, 31.24, 31.25],
-        "Longitude": [121.48, 121.49, 121.50, 121.51, 121.52],
-        "CellID": [1001, 1002, 1003, 1004, 1005],
-        "Band": ["n28", "n41", "n78", "n28", "n41"],
-        "RSRP_dBm": [-75.0, -85.0, -95.0, -105.0, -115.0],
-        "SINR_dB": [25.0, 15.0, 5.0, -5.0, -10.0],
-        "TerminalType": ["Smartphone", "CPE", "IoT", "Smartphone", "CPE"],
-        "Download_Mbps": [500.0, 600.0, 300.0, 200.0, 100.0],
-    }
-    df = pd.DataFrame(data)
-    df.to_csv(csv_file, index=False)
-    return str(csv_file)
+class TestClassifySignalStrength:
+    """测试 classify_signal_strength 信号质量分类函数。"""
 
+    def test_excellent_signal(self):
+        """RSRP > -90 dBm 应分类为'优秀'。"""
+        assert classify_signal_strength(-80) == "优秀"
+        assert classify_signal_strength(-89) == "优秀"
+        assert classify_signal_strength(-70) == "优秀"
+        assert classify_signal_strength(-50) == "优秀"
 
-@pytest.fixture
-def sample_df():
-    """创建测试用 DataFrame。"""
-    return pd.DataFrame({
-        "Latitude": [31.21, 31.22, 31.23],
-        "Longitude": [121.48, 121.49, 121.50],
-        "CellID": [1001, 1002, 1003],
-        "Band": ["n28", "n41", "n78"],
-        "RSRP_dBm": [-75.0, -95.0, -115.0],
-        "SINR_dB": [25.0, 5.0, -10.0],
-        "TerminalType": ["Smartphone", "CPE", "IoT"],
-        "Download_Mbps": [500.0, 300.0, 100.0],
-    })
+    def test_good_signal(self):
+        """-110 < RSRP <= -90 dBm 应分类为'良好'。"""
+        assert classify_signal_strength(-90) == "良好"
+        assert classify_signal_strength(-100) == "良好"
+        assert classify_signal_strength(-109) == "良好"
+        assert classify_signal_strength(-95) == "良好"
 
-
-# ============================================================
-# 测试: 数据加载
-# ============================================================
-
-class TestDataLoading:
-    """数据加载功能测试。"""
-
-    def test_load_data_returns_dataframe(self, sample_csv):
-        """验证 load_data 返回 DataFrame 类型。"""
-        df = load_data(sample_csv)
-        assert isinstance(df, pd.DataFrame)
-
-    def test_load_data_correct_row_count(self, sample_csv):
-        """验证加载的数据行数正确。"""
-        df = load_data(sample_csv)
-        assert len(df) == 5
-
-    def test_load_data_correct_columns(self, sample_csv):
-        """验证加载的数据包含所有必需列。"""
-        df = load_data(sample_csv)
-        expected_cols = [
-            "Latitude", "Longitude", "CellID", "Band",
-            "RSRP_dBm", "SINR_dB", "TerminalType", "Download_Mbps"
-        ]
-        for col in expected_cols:
-            assert col in df.columns
-
-    def test_load_data_numeric_types(self, sample_csv):
-        """验证数值列被正确转换为数值类型。"""
-        df = load_data(sample_csv)
-        assert pd.api.types.is_numeric_dtype(df["RSRP_dBm"])
-        assert pd.api.types.is_numeric_dtype(df["Download_Mbps"])
-
-    def test_load_data_drops_na_coordinates(self, tmp_path):
-        """验证缺失经纬度的行被正确过滤。"""
-        csv_file = tmp_path / "test_na.csv"
-        data = {
-            "Latitude": [31.21, np.nan, 31.23],
-            "Longitude": [121.48, 121.49, np.nan],
-            "CellID": [1001, 1002, 1003],
-            "Band": ["n28", "n41", "n78"],
-            "RSRP_dBm": [-75.0, -85.0, -95.0],
-            "SINR_dB": [25.0, 15.0, 5.0],
-            "TerminalType": ["Smartphone", "CPE", "IoT"],
-            "Download_Mbps": [500.0, 600.0, 300.0],
-        }
-        pd.DataFrame(data).to_csv(csv_file, index=False)
-        df = load_data(str(csv_file))
-        assert len(df) == 1  # 只有第一行有完整的经纬度
-
-
-# ============================================================
-# 测试: RSRP 颜色映射
-# ============================================================
-
-class TestRsrpToColor:
-    """RSRP 颜色映射函数测试。"""
-
-    def test_excellent_signal_green(self):
-        """优秀信号 (> -80) 应返回绿色。"""
-        assert rsrp_to_color(-75.0) == [0, 200, 0]
-
-    def test_good_signal_light_green(self):
-        """良好信号 (-80 ~ -90) 应返回浅绿色。"""
-        assert rsrp_to_color(-85.0) == [100, 220, 50]
-
-    def test_fair_signal_yellow(self):
-        """一般信号 (-90 ~ -100) 应返回黄色。"""
-        assert rsrp_to_color(-95.0) == [255, 200, 0]
-
-    def test_poor_signal_orange(self):
-        """较差信号 (-100 ~ -110) 应返回橙色。"""
-        assert rsrp_to_color(-105.0) == [255, 120, 0]
-
-    def test_bad_signal_red(self):
-        """很差信号 (< -110) 应返回红色。"""
-        assert rsrp_to_color(-115.0) == [255, 0, 0]
+    def test_poor_signal(self):
+        """RSRP <= -110 dBm 应分类为'较差'。"""
+        assert classify_signal_strength(-110) == "较差"
+        assert classify_signal_strength(-120) == "较差"
+        assert classify_signal_strength(-130) == "较差"
 
     def test_boundary_values(self):
         """测试边界值。"""
-        # 恰好 -80: 应为浅绿 (>-80 为绿色, -80 不大于 -80)
-        assert rsrp_to_color(-80.0) == [100, 220, 50]
-        # 恰好 -90
-        assert rsrp_to_color(-90.0) == [255, 200, 0]
-        # 恰好 -100
-        assert rsrp_to_color(-100.0) == [255, 120, 0]
-        # 恰好 -110
-        assert rsrp_to_color(-110.0) == [255, 0, 0]
-
-    def test_returns_list_of_three(self):
-        """验证返回值是长度为 3 的列表。"""
-        color = rsrp_to_color(-90.0)
-        assert isinstance(color, list)
-        assert len(color) == 3
-        assert all(isinstance(c, int) for c in color)
+        # -90 dBm 是优秀和良好的分界线，应归为良好
+        assert classify_signal_strength(-90) == "良好"
+        # -110 dBm 是良好和较差的分界线，应归为较差
+        assert classify_signal_strength(-110) == "较差"
+        # -89.99 应归为优秀
+        assert classify_signal_strength(-89.99) == "优秀"
+        # -109.99 应归为良好
+        assert classify_signal_strength(-109.99) == "良好"
 
 
 # ============================================================
-# 测试: RSRP 十六进制颜色
+# get_signal_color 函数测试
 # ============================================================
 
-class TestRsrpToColorHex:
-    """RSRP 十六进制颜色函数测试。"""
+class TestGetSignalColor:
+    """测试 get_signal_color 颜色映射函数。"""
 
-    def test_returns_hex_string(self):
-        """验证返回十六进制颜色字符串。"""
-        result = rsrp_to_color_hex(-90.0)
-        assert isinstance(result, str)
-        assert result.startswith("#")
-        assert len(result) == 7
+    def test_excellent_color(self):
+        """RSRP > -90 dBm 应返回绿色。"""
+        color = get_signal_color(-80)
+        assert color == [0, 200, 0, 200]
 
-    def test_green_hex(self):
-        """验证优秀信号十六进制颜色。"""
-        assert rsrp_to_color_hex(-75.0) == "#00C800"
+    def test_good_color(self):
+        """-110 < RSRP <= -90 dBm 应返回黄色。"""
+        color = get_signal_color(-100)
+        assert color == [255, 200, 0, 200]
 
-    def test_red_hex(self):
-        """验证很差信号十六进制颜色。"""
-        assert rsrp_to_color_hex(-115.0) == "#FF0000"
+    def test_poor_color(self):
+        """RSRP <= -110 dBm 应返回红色。"""
+        color = get_signal_color(-120)
+        assert color == [255, 0, 0, 200]
 
+    def test_color_format(self):
+        """颜色值应为包含4个整数的列表 [R, G, B, A]。"""
+        for rsrp in [-80, -100, -120]:
+            color = get_signal_color(rsrp)
+            assert isinstance(color, list)
+            assert len(color) == 4
+            for c in color:
+                assert isinstance(c, int)
+                assert 0 <= c <= 255
 
-# ============================================================
-# 测试: RSRP 信号等级
-# ============================================================
-
-class TestGetRsrpLevel:
-    """RSRP 信号等级判定函数测试。"""
-
-    def test_excellent(self):
-        assert get_rsrp_level(-75.0) == "优秀"
-
-    def test_good(self):
-        assert get_rsrp_level(-85.0) == "良好"
-
-    def test_fair(self):
-        assert get_rsrp_level(-95.0) == "一般"
-
-    def test_poor(self):
-        assert get_rsrp_level(-105.0) == "较差"
-
-    def test_bad(self):
-        assert get_rsrp_level(-115.0) == "很差"
-
-    def test_returns_string(self):
-        """验证返回值为字符串。"""
-        assert isinstance(get_rsrp_level(-90.0), str)
+    def test_boundary_colors(self):
+        """测试边界值的颜色映射。"""
+        # -90 dBm 边界
+        assert get_signal_color(-90) == [255, 200, 0, 200]  # 黄色
+        # -110 dBm 边界
+        assert get_signal_color(-110) == [255, 0, 0, 200]   # 红色
 
 
 # ============================================================
-# 测试: 数据完整性
+# 数据文件完整性测试
 # ============================================================
 
 class TestDataIntegrity:
-    """数据完整性校验测试。"""
+    """测试数据文件的完整性和格式。"""
 
-    def test_band_values_valid(self, sample_df):
-        """验证频段值在有效范围内。"""
-        valid_bands = {"n28", "n41", "n78"}
-        for band in sample_df["Band"]:
-            assert band in valid_bands
+    @pytest.fixture
+    def sample_df(self):
+        """加载测试数据集。"""
+        data_path = Path(__file__).parent / "data" / "signal_samples.csv"
+        if not data_path.exists():
+            pytest.skip("数据文件不存在，跳过数据完整性测试")
+        return pd.read_csv(data_path)
 
-    def test_rsrp_range_valid(self, sample_df):
-        """验证 RSRP 值在合理物理范围内。"""
-        for rsrp in sample_df["RSRP_dBm"]:
-            assert -140 <= rsrp <= -44  # 5G RSRP 典型范围
+    def test_data_file_exists(self):
+        """验证数据文件存在。"""
+        data_path = Path(__file__).parent / "data" / "signal_samples.csv"
+        assert data_path.exists(), "数据文件 data/signal_samples.csv 不存在"
+
+    def test_required_columns(self, sample_df):
+        """验证数据集包含所有必需列。"""
+        required_cols = ["Latitude", "Longitude", "CellID", "Band", "RSRP_dBm", "SINR_dB", "TerminalType", "Download_Mbps"]
+        for col in required_cols:
+            assert col in sample_df.columns, f"缺少必需列：{col}"
+
+    def test_data_not_empty(self, sample_df):
+        """验证数据集不为空。"""
+        assert len(sample_df) > 0, "数据集为空"
+
+    def test_latitude_range(self, sample_df):
+        """验证纬度值在合理范围内（上海地区约 31°N）。"""
+        valid_lat = sample_df["Latitude"].dropna()
+        assert valid_lat.min() >= 30, f"纬度最小值 {valid_lat.min()} 不在合理范围"
+        assert valid_lat.max() <= 32, f"纬度最大值 {valid_lat.max()} 不在合理范围"
+
+    def test_longitude_range(self, sample_df):
+        """验证经度值在合理范围内（上海地区约 121°E）。"""
+        valid_lon = sample_df["Longitude"].dropna()
+        assert valid_lon.min() >= 120, f"经度最小值 {valid_lon.min()} 不在合理范围"
+        assert valid_lon.max() <= 122, f"经度最大值 {valid_lon.max()} 不在合理范围"
+
+    def test_rsrp_range(self, sample_df):
+        """验证 RSRP 值在合理范围内（5G 信号通常 -140 ~ -44 dBm）。"""
+        valid_rsrp = sample_df["RSRP_dBm"].dropna()
+        assert valid_rsrp.min() >= -140, f"RSRP 最小值 {valid_rsrp.min()} 不在合理范围"
+        assert valid_rsrp.max() <= -44, f"RSRP 最大值 {valid_rsrp.max()} 不在合理范围"
+
+    def test_band_values(self, sample_df):
+        """验证频段值为已知的 5G 频段。"""
+        valid_bands = {"n28", "n41", "n78", "n79", "n1", "n3", "n77"}
+        actual_bands = set(sample_df["Band"].dropna().unique())
+        # 允许数据中包含的频段是已知频段的子集
+        assert actual_bands.issubset(valid_bands), f"发现未知频段：{actual_bands - valid_bands}"
+
+    def test_terminal_type_values(self, sample_df):
+        """验证终端类型为已知类型。"""
+        valid_types = {"Smartphone", "CPE", "IoT"}
+        actual_types = set(sample_df["TerminalType"].dropna().unique())
+        assert actual_types.issubset(valid_types), f"发现未知终端类型：{actual_types - valid_types}"
 
     def test_download_speed_positive(self, sample_df):
-        """验证下载速率为正数。"""
-        for speed in sample_df["Download_Mbps"]:
-            assert speed >= 0
-
-    def test_latitude_range_shanghai(self, sample_df):
-        """验证纬度在上海范围内。"""
-        for lat in sample_df["Latitude"]:
-            assert 30.7 <= lat <= 31.9  # 上海大致纬度范围
-
-    def test_longitude_range_shanghai(self, sample_df):
-        """验证经度在上海范围内。"""
-        for lon in sample_df["Longitude"]:
-            assert 120.8 <= lon <= 122.2  # 上海大致经度范围
+        """验证下载速率为正值。"""
+        valid_speed = sample_df["Download_Mbps"].dropna()
+        assert (valid_speed > 0).all(), "下载速率存在非正值"
 
 
 # ============================================================
-# 测试: 实际数据集加载
+# 数据处理逻辑测试
 # ============================================================
 
-class TestRealDataset:
-    """使用实际数据集的集成测试。"""
+class TestDataProcessing:
+    """测试数据处理相关逻辑。"""
 
-    def test_real_data_loadable(self):
-        """验证实际数据集可以正常加载。"""
-        data_path = Path(__file__).parent / "data" / "signal_samples.csv"
-        if data_path.exists():
-            df = load_data(str(data_path))
-            assert len(df) > 0
-            assert "RSRP_dBm" in df.columns
+    def test_signal_classification_consistency(self):
+        """验证信号分类与颜色映射的一致性。"""
+        test_rsrp_values = [-70, -80, -90, -95, -100, -110, -120]
+        for rsrp in test_rsrp_values:
+            quality = classify_signal_strength(rsrp)
+            color = get_signal_color(rsrp)
+            if quality == "优秀":
+                assert color[1] == 200 and color[0] == 0  # 绿色
+            elif quality == "良好":
+                assert color[0] == 255 and color[1] == 200  # 黄色
+            elif quality == "较差":
+                assert color[0] == 255 and color[1] == 0  # 红色
 
-    def test_real_data_has_all_bands(self):
-        """验证实际数据集包含所有三种频段。"""
-        data_path = Path(__file__).parent / "data" / "signal_samples.csv"
-        if data_path.exists():
-            df = load_data(str(data_path))
-            bands = set(df["Band"].unique())
-            assert bands.issuperset({"n28", "n41", "n78"})
+    def test_filter_logic(self):
+        """测试筛选逻辑是否正确。"""
+        # 创建测试数据
+        test_data = pd.DataFrame({
+            "Band": ["n28", "n78", "n41", "n28", "n78"],
+            "RSRP_dBm": [-80, -100, -115, -85, -95],
+            "TerminalType": ["Smartphone", "CPE", "IoT", "Smartphone", "CPE"],
+            "SINR_dB": [10, 15, -2, 20, 5],
+        })
 
-    def test_real_data_has_all_terminal_types(self):
-        """验证实际数据集包含所有三种终端类型。"""
-        data_path = Path(__file__).parent / "data" / "signal_samples.csv"
-        if data_path.exists():
-            df = load_data(str(data_path))
-            terminals = set(df["TerminalType"].unique())
-            assert terminals.issuperset({"Smartphone", "CPE", "IoT"})
+        # 测试频段筛选
+        filtered = test_data[test_data["Band"].isin(["n28"])]
+        assert len(filtered) == 2
+        assert set(filtered["Band"]) == {"n28"}
+
+        # 测试 RSRP 范围筛选（-100 到 -80 包含 -80, -100, -85, -95 共4个值）
+        filtered = test_data[(test_data["RSRP_dBm"] >= -100) & (test_data["RSRP_dBm"] <= -80)]
+        assert len(filtered) == 4
+
+        # 测试终端类型筛选
+        filtered = test_data[test_data["TerminalType"].isin(["CPE"])]
+        assert len(filtered) == 2
 
 
 if __name__ == "__main__":

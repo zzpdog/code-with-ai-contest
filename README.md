@@ -1,96 +1,122 @@
 # 📡 5G 信号可视化看板
 
-> "Code with AI" 海选赛参赛项目 — 基于 Streamlit 的 5G 路测数据交互式可视化看板
+> **"Code with AI" 海选赛参赛作品** — 将 5G 路测数据极速转化为交互式 Web 可视化看板
 
-## 🎯 项目简介
+## 🌟 项目简介
 
-本项目利用 AI Coding Agent 辅助开发，使用纯 Python 框架 Streamlit 将 5G 路测模拟数据转化为一个功能丰富的交互式 Web 数据可视化看板。看板支持信号地图展示、数据图表分析、侧边栏联动筛选以及 3D 地图可视化等功能。
+本项目基于 Streamlit 框架，将 5G 路测模拟数据（`data/signal_samples.csv`）转化为一个功能丰富的交互式 Web 数据可视化看板。用户可以通过侧边栏筛选器实时过滤数据，地图和图表会联动更新。
 
 ## ✨ 功能特性
 
-### 🟢 基础关卡（已完成）
+### 🟢 基础关卡功能
 
-- **数据加载**: 使用 Pandas 读取 `signal_samples.csv`，支持数据预览与统计摘要
-- **信号散点地图**: 基于 PyDeck 的交互式地图，数据点根据 RSRP 信号强度自动变色
-  - 🟢 绿色: 优秀 (> -80 dBm)
-  - 🟡 黄色: 一般 (-90 ~ -100 dBm)
-  - 🔴 红色: 很差 (< -110 dBm)
-- **数据概览图表**: 频段分布柱状图 + 终端类型饼图
+| 功能 | 说明 |
+|------|------|
+| **数据加载** | 使用 pandas 读取 CSV 数据，自动清洗和类型转换 |
+| **信号散点地图** | 基于 pydeck 渲染交互式 2D 地图，数据点按 RSRP 信号强度变色（🟢 优秀 / 🟡 良好 / 🔴 较差） |
+| **数据概览图表** | 各频段基站数量柱状图 + 终端类型占比饼图 |
 
-### 🟡 进阶关卡（已完成）
+### 🟡 进阶关卡功能
 
-- **侧边栏联动筛选**: 支持频段、终端类型、RSRP 范围、SINR 范围多维度筛选，地图与图表实时联动更新
-- **3D 柱状地图**: 切换至 3D 视图，信号点以柱状图形式展示，柱高随下载速率变化
-- **深度分析图表**: RSRP 分布直方图 + 各频段平均下载速率对比
-- **工程化素养**: 完整的代码注释 + 单元测试覆盖
+| 功能 | 说明 |
+|------|------|
+| **侧边栏联动筛选** | 频段下拉菜单、RSRP 范围滑动条、终端类型筛选、SINR 范围滑动条，拖动时地图和图表实时更新 |
+| **3D 信号柱状地图** | 信号点以 3D 柱状图形式展示，柱体高度随下载速率(Download_Mbps)变化，颜色随 RSRP 变化 |
+| **工程化素养** | 核心代码含规范注释和 docstring，附带完整单元测试 `test_app.py` |
 
-## 📁 项目结构
+### 📊 额外分析功能
+
+- **信号质量深度分析**：RSRP 分布直方图 + 各频段 RSRP 箱线图
+- **下载速率分析**：各频段平均下载速率柱状图 + 下载速率 vs RSRP 散点图
+- **数据明细表格**：筛选后的数据明细展示
+- **实时统计指标**：数据点总数、平均 RSRP、平均 SINR、平均下载速率等
+
+## 🗂️ 项目结构
 
 ```
-code-with-ai-contest/
+.
+├── app.py                  # 主应用程序（Streamlit 看板）
+├── test_app.py             # 单元测试
+├── requirements.txt        # Python 依赖
+├── README.md               # 项目说明文档
+├── AI_PROMPTS.md           # AI Agent 交互日志
 ├── data/
-│   └── signal_samples.csv      # 5G 信号模拟数据集
-├── app.py                      # Streamlit 主应用
-├── test_app.py                 # 单元测试
-├── requirements.txt            # Python 依赖
-├── README.md                   # 项目说明（本文件）
-└── AI_PROMPTS.md               # AI 交互日志
+│   └── signal_samples.csv  # 5G 路测模拟数据
+└── screenshots/            # 运行截图
 ```
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 1. 环境准备
+
+确保已安装 Python 3.9+：
+
+```bash
+python --version
+```
+
+### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 运行应用
+### 3. 启动应用
 
 ```bash
 streamlit run app.py
 ```
 
-浏览器会自动打开 `http://localhost:8501`，即可看到可视化看板。
+启动后浏览器会自动打开 `http://localhost:8501`，即可看到 5G 信号可视化看板。
 
-### 3. 运行测试
+### 4. 运行测试
 
 ```bash
 pytest test_app.py -v
 ```
 
-## 📊 数据集说明
+## 📊 数据说明
+
+数据文件 `data/signal_samples.csv` 包含以下字段：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| Latitude | Float | 纬度（上海地区） |
-| Longitude | Float | 经度（上海地区） |
-| CellID | Integer | 小区 ID |
-| Band | String | 5G 频段 (n28/n41/n78) |
-| RSRP_dBm | Float | 参考信号接收功率 (dBm) |
-| SINR_dB | Float | 信噪比 (dB) |
-| TerminalType | String | 终端类型 (Smartphone/CPE/IoT) |
-| Download_Mbps | Float | 下载速率 (Mbps) |
+| Latitude | float | 纬度（上海地区 ~31°N） |
+| Longitude | float | 经度（上海地区 ~121°E） |
+| CellID | int | 小区 ID |
+| Band | str | 频段（n28 / n41 / n78） |
+| RSRP_dBm | float | 信号强度（dBm），范围约 -120 ~ -70 |
+| SINR_dB | float | 信噪比（dB） |
+| TerminalType | str | 终端类型（Smartphone / CPE / IoT） |
+| Download_Mbps | float | 下载速率（Mbps） |
+
+### 信号质量判定标准
+
+| RSRP 范围 | 信号质量 | 颜色 |
+|-----------|---------|------|
+| > -90 dBm | 优秀 | 🟢 绿色 |
+| -110 ~ -90 dBm | 良好 | 🟡 黄色 |
+| ≤ -110 dBm | 较差 | 🔴 红色 |
 
 ## 🛠️ 技术栈
 
-- **Python 3.x** — 编程语言
-- **Streamlit** — Web 应用框架
-- **Pandas** — 数据处理
-- **PyDeck** — 地图可视化（2D/3D）
-- **Plotly** — 交互式图表
-- **Pytest** — 单元测试
+- **[Streamlit](https://streamlit.io/)** — Web 应用框架
+- **[Pydeck](https://deckgl.readthedocs.io/)** — 地理空间可视化（2D/3D 地图）
+- **[Plotly](https://plotly.com/python/)** — 交互式图表
+- **[Pandas](https://pandas.pydata.org/)** — 数据处理
+- **[Pytest](https://pytest.org/)** — 单元测试
 
-## 📸 功能截图说明
+## 📸 运行截图
 
-1. **2D 信号地图**: 散点根据 RSRP 信号强度变色，鼠标悬停可查看详细信息
-2. **3D 柱状地图**: 柱高随下载速率变化，支持旋转和缩放
-3. **侧边栏筛选**: 拖动滑块或选择频段/终端类型，地图和图表实时更新
+> 截图保存在 `screenshots/` 目录下，展示地图和侧边栏交互效果。
 
-## 📝 开发日志
+## 📄 提交物清单
 
-本项目完全使用 AI Coding Agent 辅助开发，开发过程详见 `AI_PROMPTS.md`。
+- [x] 📂 源代码：`app.py` + `requirements.txt`（一键跑通）
+- [x] 📄 项目说明文档：`README.md`
+- [x] 📸 运行截图：`screenshots/` 目录
+- [x] 🤖 Agent 交互日志：`AI_PROMPTS.md`
 
-## 📄 许可证
+---
 
-本项目仅用于 "Code with AI" 海选赛参赛提交。
+Built with ❤️ using AI Coding Agent | Streamlit + Pydeck + Plotly
